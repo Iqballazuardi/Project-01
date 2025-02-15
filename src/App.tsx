@@ -9,6 +9,7 @@ import {
 } from "react-router-dom";
 import { Provider, useDispatch, useSelector } from "react-redux";
 import { configureStore, createSlice, PayloadAction } from "@reduxjs/toolkit";
+import Cookies from "js-cookie";
 import "./index.css";
 
 // Tipe untuk state auth
@@ -31,20 +32,33 @@ const authSlice = createSlice({
     } as AuthState,
     reducers: {
         login: (state, action: PayloadAction<User>) => {
+            const users = JSON.parse(localStorage.getItem("users") || "[]");
+            state.users.push(...users);
             const user = state.users.find(
-                (u) =>
+                (u: User) =>
                     u.username === action.payload.username &&
                     u.password === action.payload.password
             );
             if (user) {
                 state.currentUser = user;
+                localStorage.setItem("currentUser", JSON.stringify(user));
+                Cookies.set("LoginTimeout", "true", { expires: 1 / 1440 });
             }
         },
         register: (state, action: PayloadAction<User>) => {
             state.users.push(action.payload);
+            localStorage.setItem("users", JSON.stringify(state.users));
         },
         logout: (state) => {
             state.currentUser = null;
+        },
+        updateStateFromStorage: (state) => {
+            const users = JSON.parse(localStorage.getItem("users") || "[]");
+            state.users.push(...users);
+            const user = JSON.parse(
+                localStorage.getItem("currentUser") || "null"
+            );
+            state.currentUser = user;
         },
     },
 });
@@ -52,7 +66,7 @@ const authSlice = createSlice({
 const store = configureStore({
     reducer: { auth: authSlice.reducer },
 });
-const { login, logout, register } = authSlice.actions;
+const { login, logout, register, updateStateFromStorage } = authSlice.actions;
 
 type RootState = ReturnType<typeof store.getState>;
 
@@ -68,19 +82,17 @@ const Login = () => {
     const users = useSelector((state: RootState) => state.auth.users);
 
     const onSubmit = (data: User) => {
-        console.log(data);
-
-        // const userExists = users.some(
-        //     (user) =>
-        //         user.username === data.username &&
-        //         user.password === data.password
-        // );
-        // if (userExists) {
-        //     dispatch(login(data));
-        //     navigate("/");
-        // } else {
-        //     navigate("/register");
-        // }
+        const userExists = users.some(
+            (user) =>
+                user.username === data.username &&
+                user.password === data.password
+        );
+        if (userExists) {
+            dispatch(login(data));
+            navigate("/");
+        } else {
+            navigate("/register");
+        }
     };
 
     return (
@@ -164,6 +176,17 @@ const Home = () => {
     const dispatch = useDispatch();
     const navigate = useNavigate();
 
+    React.useEffect(() => {
+        const loginTimeout = () => {
+            if (!Cookies.get("LoginTimeout")) {
+                dispatch(logout());
+                navigate("/login");
+            }
+        };
+        const interval = setInterval(loginTimeout, 1000);
+        return () => clearInterval(interval);
+    }, [dispatch, navigate]);
+
     return user ? (
         <div className="container">
             <h2>Selamat Datang, {user.username}</h2>
@@ -192,18 +215,27 @@ const NotFound = () => {
 
 // Komponen Utama Aplikasi
 const App = () => {
+    const dispatch = useDispatch();
+    React.useEffect(() => {
+        dispatch(updateStateFromStorage());
+    }, [dispatch]);
     return (
-        <Provider store={store}>
-            <Router>
-                <Routes>
-                    <Route path="/" element={<Home />} />
-                    <Route path="/login" element={<Login />} />
-                    <Route path="/register" element={<Register />} />
-                    <Route path="*" element={<NotFound />} />
-                </Routes>
-            </Router>
-        </Provider>
+        <Router>
+            <Routes>
+                <Route path="/" element={<Home />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/register" element={<Register />} />
+                <Route path="*" element={<NotFound />} />
+            </Routes>
+        </Router>
     );
 };
 
-export default App;
+const AppWrapper = () => {
+    return (
+        <Provider store={store}>
+            <App />
+        </Provider>
+    );
+};
+export default AppWrapper;
