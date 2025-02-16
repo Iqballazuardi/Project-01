@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import {
     BrowserRouter as Router,
@@ -11,6 +11,7 @@ import { Provider, useDispatch, useSelector } from "react-redux";
 import { configureStore, createSlice, PayloadAction } from "@reduxjs/toolkit";
 import Cookies from "js-cookie";
 import "./index.css";
+import Swal from "sweetalert2";
 
 // Tipe untuk state auth
 interface User {
@@ -32,6 +33,8 @@ const authSlice = createSlice({
     } as AuthState,
     reducers: {
         login: (state, action: PayloadAction<User>) => {
+            console.log(state);
+            console.log(action);
             const users = JSON.parse(localStorage.getItem("users") || "[]");
             state.users.push(...users);
             const user = state.users.find(
@@ -42,7 +45,13 @@ const authSlice = createSlice({
             if (user) {
                 state.currentUser = user;
                 localStorage.setItem("currentUser", JSON.stringify(user));
-                Cookies.set("LoginTimeout", "true", { expires: 1 / 1440 });
+                // Cookies.set("LoginTimeout", "true", { expires: 1 / 1440 });
+                const inFifteenMinutes = new Date(
+                    new Date().getTime() + 1 * 60 * 1000
+                );
+                Cookies.set("LoginTimeout", "true", {
+                    expires: inFifteenMinutes,
+                });
             }
         },
         register: (state, action: PayloadAction<User>) => {
@@ -81,6 +90,12 @@ const Login = () => {
     } = useForm<User>();
     const users = useSelector((state: RootState) => state.auth.users);
 
+    useEffect(() => {
+        if (Cookies.get("LoginTimeout")) {
+            navigate("/");
+        }
+    }, [navigate]);
+
     const onSubmit = (data: User) => {
         const userExists = users.some(
             (user) =>
@@ -89,15 +104,34 @@ const Login = () => {
         );
         if (userExists) {
             dispatch(login(data));
+            Swal.fire({
+                title: "Success!",
+                text: "Login success!",
+                icon: "success",
+                confirmButtonText: "Cool",
+            });
             navigate("/");
         } else {
-            navigate("/register");
+            Swal.fire({
+                title: "Error!",
+                text: "Username atau password salah",
+                icon: "error",
+                confirmButtonText: "Cool",
+            });
         }
     };
 
     return (
         <div className="container">
-            <h2>Halaman Login</h2>
+            <h2> Halaman Login</h2>.
+            {/* {error && (
+                <div
+                    className="p-4 mb-4 text-sm text-blue-800 rounded-lg bg-blue-50 dark:bg-gray-800 dark:text-blue-400"
+                    role="alert"
+                >
+                    <span className="font-medium">{error}</span>
+                </div>
+            )} */}
             <form onSubmit={handleSubmit(onSubmit)}>
                 <input
                     {...formRegister("username", {
@@ -139,7 +173,25 @@ const Register = () => {
     } = useForm<User>();
 
     const onSubmit = (data: User) => {
+        const userExists = JSON.parse(
+            localStorage.getItem("users") || "[]"
+        ).some((user: User) => user.username === data.username);
+        if (userExists) {
+            Swal.fire({
+                title: "Error!",
+                text: "Username sudah terdaftar",
+                icon: "error",
+                confirmButtonText: "Cool",
+            });
+            return;
+        }
         dispatch(register(data));
+        Swal.fire({
+            title: "Success!",
+            text: "Register berhasil, silahkan login",
+            icon: "success",
+            confirmButtonText: "Cool",
+        });
         navigate("/login");
     };
 
@@ -179,6 +231,7 @@ const Home = () => {
     React.useEffect(() => {
         const loginTimeout = () => {
             if (!Cookies.get("LoginTimeout")) {
+                Cookies.remove("LoginTimeout");
                 dispatch(logout());
                 navigate("/login");
             }
@@ -193,6 +246,7 @@ const Home = () => {
             <button
                 onClick={() => {
                     dispatch(logout());
+                    Cookies.remove("LoginTimeout");
                     navigate("/login");
                 }}
             >
